@@ -1,12 +1,12 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { useAuth } from "@/hooks/use-auth"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { AlertCircle, CheckCircle, XCircle } from "lucide-react"
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/hooks/use-auth'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { AlertCircle, CheckCircle, XCircle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,8 +14,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 
 interface User {
   _id: string
@@ -31,15 +31,15 @@ export default function AdminUsersPage() {
   const { user, isLoading: authLoading } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState("")
+  const [error, setError] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [rejectionReason, setRejectionReason] = useState("")
+  const [rejectionReason, setRejectionReason] = useState('')
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
-    if (!user || user.role !== "admin") {
-      window.location.href = "/dashboard"
+    if (!user || user.role !== 'admin') {
+      window.location.href = '/dashboard'
       return
     }
 
@@ -49,17 +49,20 @@ export default function AdminUsersPage() {
   const fetchPendingUsers = async () => {
     try {
       setIsLoading(true)
-      const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/pending-users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const token = localStorage.getItem('token')
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/pending-users`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
 
-      if (!response.ok) throw new Error("Failed to fetch users")
+      if (!response.ok) throw new Error('Failed to fetch users')
 
       const data = await response.json()
       setUsers(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load users")
+      setError(err instanceof Error ? err.message : 'Failed to load users')
     } finally {
       setIsLoading(false)
     }
@@ -67,52 +70,62 @@ export default function AdminUsersPage() {
 
   const handleApprove = async (userId: string) => {
     try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/approve-user/${userId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const token = localStorage.getItem('token')
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/approve-user/${userId}`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
 
-      if (!response.ok) throw new Error("Failed to approve user")
+      if (!response.ok) throw new Error('Failed to approve user')
 
-      setUsers(users.filter((u) => u._id !== userId))
+      setUsers(users.filter(u => u._id !== userId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve user")
+      setError(err instanceof Error ? err.message : 'Failed to approve user')
     }
   }
 
   const handleReject = async (userId: string) => {
     try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/reject-user/${userId}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+      const token = localStorage.getItem('token')
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/reject-user/${userId}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ reason: rejectionReason }),
         },
-        body: JSON.stringify({ reason: rejectionReason }),
-      })
+      )
 
-      if (!response.ok) throw new Error("Failed to reject user")
+      if (!response.ok) throw new Error('Failed to reject user')
 
-      setUsers(users.filter((u) => u._id !== userId))
+      setUsers(users.filter(u => u._id !== userId))
       setRejectDialogOpen(false)
       setSelectedUser(null)
-      setRejectionReason("")
+      setRejectionReason('')
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reject user")
+      setError(err instanceof Error ? err.message : 'Failed to reject user')
     }
   }
 
   if (authLoading || isLoading) {
-    return <div className="flex items-center justify-center p-8">Loading...</div>
+    return (
+      <div className="flex items-center justify-center p-8">Loading...</div>
+    )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-8 py-3">
       <div>
         <h1 className="text-3xl font-bold">User Approvals</h1>
-        <p className="text-muted-foreground">Manage pending user registrations</p>
+        <p className="text-muted-foreground">
+          Manage pending user registrations
+        </p>
       </div>
 
       {error && (
@@ -125,12 +138,14 @@ export default function AdminUsersPage() {
       {users.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">No pending users</p>
+            <p className="text-center text-muted-foreground">
+              No pending users
+            </p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4">
-          {users.map((u) => (
+          {users.map(u => (
             <Card key={u._id}>
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
@@ -140,13 +155,19 @@ export default function AdminUsersPage() {
                       <Badge variant="outline">{u.role}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{u.email}</p>
-                    {u.phone && <p className="text-sm text-muted-foreground">{u.phone}</p>}
+                    {u.phone && (
+                      <p className="text-sm text-muted-foreground">{u.phone}</p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">
                       Applied: {new Date(u.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" className="gap-2" onClick={() => handleApprove(u._id)}>
+                    <Button
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => handleApprove(u._id)}
+                    >
                       <CheckCircle className="h-4 w-4" />
                       Approve
                     </Button>
@@ -174,15 +195,20 @@ export default function AdminUsersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject User</DialogTitle>
-            <DialogDescription>Provide a reason for rejecting {selectedUser?.name}</DialogDescription>
+            <DialogDescription>
+              Provide a reason for rejecting {selectedUser?.name}
+            </DialogDescription>
           </DialogHeader>
           <Textarea
             placeholder="Reason for rejection..."
             value={rejectionReason}
-            onChange={(e) => setRejectionReason(e.target.value)}
+            onChange={e => setRejectionReason(e.target.value)}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setRejectDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button

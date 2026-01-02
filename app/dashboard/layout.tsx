@@ -1,9 +1,10 @@
-"use client"
+'use client'
 
-import { useAuth } from "@/hooks/use-auth"
-import { Sidebar } from "@/components/sidebar"
-import { Topbar } from "@/components/topbar"
-import type { ReactNode } from "react"
+import { useAuth } from '@/hooks/use-auth'
+import { Sidebar } from '@/components/sidebar'
+import { Topbar } from '@/components/topbar'
+import type { ReactNode } from 'react'
+import { redirect } from 'next/navigation'
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -20,7 +21,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return null
+    redirect('/auth/login')
   }
 
   return (
