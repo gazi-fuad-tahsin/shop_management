@@ -5,7 +5,7 @@ import { createCategory, getCategories, updateCategory } from "../controllers/ca
 const router = express.Router()
 
 router.get("/", verifyToken, getCategories)
-router.post("/", verifyToken, authorizeRole(["admin", "manager"]), createCategory)
-router.put("/:id", verifyToken, authorizeRole(["admin", "manager"]), updateCategory)
+router.post("/", verifyToken, authorizeRole(["super_admin", "admin", "manager"]), createCategory)
+router.put("/:id", verifyToken, authorizeRole(["super_admin", "admin", "manager"]), updateCategory)
 
 export default router

@@ -14,8 +14,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("")
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
+  const [branchCode, setBranchCode] = useState("")
   const [error, setError] = useState("")
   const [pending, setPending] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -30,7 +31,7 @@ export default function LoginPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password, branchCode }),
       })
 
       const data = await response.json()
@@ -48,7 +49,7 @@ export default function LoginPage() {
       localStorage.setItem("token", data.token)
       localStorage.setItem("user", JSON.stringify(data.user))
 
-      router.push("/dashboard")
+      router.push(data.user?.role === "super_admin" ? "/super-admin" : "/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
     } finally {
@@ -74,7 +75,7 @@ export default function LoginPage() {
       <Card className="border-white/70 bg-white/80 shadow-[0_24px_80px_rgba(0,0,0,0.08)] backdrop-blur-xl">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-2xl font-bold">Login</CardTitle>
-          <CardDescription>Enter your credentials to access the system</CardDescription>
+          <CardDescription>Tenant users need their branch code. Super Admin can leave it blank.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -93,15 +94,25 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="identifier">Email or phone</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="admin@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="identifier"
+                placeholder="admin@example.com or +880..."
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="branchCode">Branch code</Label>
+              <Input
+                id="branchCode"
+                placeholder="SHOP-ABC123"
+                value={branchCode}
+                onChange={(e) => setBranchCode(e.target.value.toUpperCase())}
+              />
+              <p className="text-xs text-muted-foreground">Required for shop admins, managers, and staff.</p>
             </div>
 
             <div className="space-y-2">

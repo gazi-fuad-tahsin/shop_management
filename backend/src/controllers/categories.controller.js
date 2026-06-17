@@ -1,9 +1,11 @@
 import Category from "../models/Category.js"
 import User from "../models/User.js"
+import { assertTenantAccess, buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
 export const getCategories = async (req, res) => {
   try {
-    const query = { isActive: true }
+    const { shopId } = req.query
+    const { query } = await buildTenantQuery(req, shopId, { isActive: true })
     const categories = await Category.find(query).populate("parent").populate("shop", "name")
     res.json(categories)
   } catch (error) {
@@ -14,13 +16,18 @@ export const getCategories = async (req, res) => {
 export const createCategory = async (req, res) => {
   try {
     const { name, description, parent } = req.body
-    const user = await User.findById(req.user.id).select("shop role")
+    const tenant = await getUserTenant(req)
 
-    if (!user.shop && user.role !== "admin") {
+    if (!tenant.isGlobal && !tenant.shopId) {
       return res.status(400).json({ message: "You must be assigned to a shop" })
     }
 
-    const shopId = user.role === "admin" ? req.body.shop : user.shop
+    const requestedShop = req.body.shop
+    const shopId = tenant.isGlobal
+      ? requestedShop
+      : requestedShop && tenant.accessibleShopIds?.some((id) => id?.toString() === requestedShop.toString())
+        ? requestedShop
+        : tenant.shopId
     if (!shopId) {
       return res.status(400).json({ message: "Shop is required" })
     }
@@ -44,18 +51,20 @@ export const createCategory = async (req, res) => {
 
 export const updateCategory = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("shop role")
+    const tenant = await getUserTenant(req)
     const category = await Category.findById(req.params.id)
 
     if (!category) {
       return res.status(404).json({ message: "Category not found" })
     }
 
-    if (user.role !== "admin" && category.shop.toString() !== user.shop?.toString()) {
+    if (!assertTenantAccess(category.shop, tenant)) {
       return res.status(403).json({ message: "Access denied" })
     }
 
-    const updated = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate([
+    const updates = { ...req.body }
+    delete updates.shop
+    const updated = await Category.findByIdAndUpdate(req.params.id, updates, { new: true }).populate([
       "parent",
       "shop",
     ])

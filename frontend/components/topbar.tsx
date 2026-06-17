@@ -43,7 +43,7 @@ interface TopbarProps {
 export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarProps) {
   const { logout } = useAuth()
   const pathname = usePathname()
-  const navigationItems = getNavigationItems(user.role as "admin" | "manager" | "staff")
+  const navigationItems = getNavigationItems(user.role as "super_admin" | "admin" | "manager" | "staff")
   const shopName = typeof user.shop === "object" && user.shop?.name ? user.shop.name : null
 
   if (!user?.name) {
@@ -113,7 +113,7 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
         </div>
         <div className="min-w-0">
           <h2 className="text-sm font-medium text-muted-foreground">Welcome back</h2>
-          {shopName && user.role === "manager" && (
+          {shopName && user.role !== "super_admin" && (
             <div className="flex items-center gap-1 mt-1 text-xs text-foreground truncate">
               <Store className="w-3 h-3" />
               <span className="truncate">{shopName}</span>
@@ -138,7 +138,7 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
           <DropdownMenuLabel>
             <div>{user.name}</div>
             <div className="text-xs font-normal text-muted-foreground">{user.email}</div>
-            {shopName && user.role === "manager" && (
+            {shopName && user.role !== "super_admin" && (
               <div className="text-xs font-normal text-muted-foreground flex items-center gap-1 mt-1">
                 <Store className="w-3 h-3" /> {shopName}
               </div>

@@ -13,8 +13,13 @@ interface User {
   id: string
   name: string
   email: string
-  role: "admin" | "manager" | "staff"
+  role: "super_admin" | "admin" | "manager" | "staff"
   shop?: Shop | string | null
+  mainShop?: Shop | string | null
+  branchShop?: Shop | string | null
+  approvalStatus?: "pending" | "approved" | "rejected"
+  managerStatus?: "none" | "pending" | "approved" | "rejected"
+  branchSetupStatus?: "not_required" | "pending" | "completed"
 }
 
 export function useAuth() {
@@ -25,7 +30,7 @@ export function useAuth() {
 
   const fetchUserById = async (userId: string): Promise<User | null> => {
     try {
-      const response = await apiCall(`/api/users/${userId}`)
+      const response = await apiCall(`/api/auth/me`)
 
       if (!response.ok) {
         return null

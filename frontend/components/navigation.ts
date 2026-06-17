@@ -1,6 +1,6 @@
-import { BarChart3, LayoutDashboard, Package, ReceiptText, Settings, ShoppingCart, Users, Zap } from "lucide-react"
+import { BarChart3, Building2, CreditCard, LayoutDashboard, Package, ReceiptText, Settings, ShoppingCart, Store, Users, Zap } from "lucide-react"
 
-export type AppRole = "admin" | "manager" | "staff"
+export type AppRole = "super_admin" | "admin" | "manager" | "staff"
 
 export type NavigationItem = {
   href: string
@@ -9,6 +9,15 @@ export type NavigationItem = {
 }
 
 export function getNavigationItems(role: AppRole): NavigationItem[] {
+  if (role === "super_admin") {
+    return [
+      { href: "/super-admin", label: "Global Dashboard", icon: LayoutDashboard },
+      { href: "/super-admin/shops", label: "Shops", icon: Building2 },
+      { href: "/super-admin/users", label: "Users", icon: Users },
+      { href: "/super-admin/packages", label: "Packages", icon: CreditCard },
+    ]
+  }
+
   return [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/products", label: "Products", icon: Package },
@@ -22,7 +31,9 @@ export function getNavigationItems(role: AppRole): NavigationItem[] {
     ...(role === "admin"
       ? [
           { href: "/users", label: "User Approvals", icon: Users },
-          { href: "/admin", label: "Admin Panel", icon: Settings },
+          { href: "/branches", label: "Branches", icon: Building2 },
+          { href: "/admin", label: "Shop Admin", icon: Store },
+          { href: "/settings", label: "Shop Settings", icon: Settings },
         ]
       : []),
   ]

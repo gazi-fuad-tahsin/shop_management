@@ -1,18 +1,12 @@
 import Inventory from "../models/Inventory.js"
 import User from "../models/User.js"
 import Product from "../models/Product.js"
+import { assertTenantAccess, buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
 export const getInventory = async (req, res) => {
   try {
     const { shopId } = req.query
-    const user = await User.findById(req.user.id).select("shop role")
-
-    const query = {}
-    if (user.role !== "admin") {
-      query.shop = user.shop
-    } else if (shopId) {
-      query.shop = shopId
-    }
+    const { query } = await buildTenantQuery(req, shopId)
 
     const inventory = await Inventory.find(query).populate("product").populate("shop", "name")
     res.json(inventory)
@@ -23,18 +17,18 @@ export const getInventory = async (req, res) => {
 
 export const getInventoryByProduct = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("shop role")
+    const tenant = await getUserTenant(req)
     const product = await Product.findById(req.params.productId)
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" })
     }
 
-    if (user.role !== "admin" && product.shop.toString() !== user.shop?.toString()) {
+    if (!assertTenantAccess(product.shop, tenant)) {
       return res.status(403).json({ message: "Access denied" })
     }
 
-    const inventory = await Inventory.findOne({ product: req.params.productId }).populate("product").populate("shop", "name")
+    const inventory = await Inventory.findOne({ product: req.params.productId, shop: product.shop }).populate("product").populate("shop", "name")
     res.json(inventory)
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -48,12 +42,15 @@ export const updateInventory = async (req, res) => {
       return res.status(404).json({ message: "Inventory not found" })
     }
 
-    const user = await User.findById(req.user.id).select("shop role")
-    if (user.role !== "admin" && inventory.shop.toString() !== user.shop?.toString()) {
+    const tenant = await getUserTenant(req)
+    if (!assertTenantAccess(inventory.shop, tenant)) {
       return res.status(403).json({ message: "Access denied" })
     }
 
-    const updated = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    const updates = { ...req.body }
+    delete updates.shop
+    delete updates.product
+    const updated = await Inventory.findByIdAndUpdate(req.params.id, updates, { new: true })
       .populate("product")
       .populate("shop", "name")
 
@@ -65,12 +62,17 @@ export const updateInventory = async (req, res) => {
 
 export const createInventory = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("shop role")
-    if (!user.shop && user.role !== "admin") {
+    const tenant = await getUserTenant(req)
+    if (!tenant.isGlobal && !tenant.shopId) {
       return res.status(400).json({ message: "You must be assigned to a shop first" })
     }
 
-    const shopId = user.role === "admin" ? req.body.shop : user.shop
+    const requestedShop = req.body.shop
+    const shopId = tenant.isGlobal
+      ? requestedShop
+      : requestedShop && tenant.accessibleShopIds?.some((id) => id?.toString() === requestedShop.toString())
+        ? requestedShop
+        : tenant.shopId
     if (!shopId) {
       return res.status(400).json({ message: "Shop is required" })
     }

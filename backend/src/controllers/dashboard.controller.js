@@ -2,18 +2,12 @@ import Sale from "../models/Sale.js"
 import User from "../models/User.js"
 import Product from "../models/Product.js"
 import Inventory from "../models/Inventory.js"
+import { buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
 export const getDashboardStats = async (req, res) => {
   try {
     const { shopId } = req.query
-    const user = await User.findById(req.user.id).select("shop role")
-
-    let shopFilter = {}
-    if (user.role === "manager") {
-      shopFilter = { shop: user.shop }
-    } else if (user.role === "admin" && shopId) {
-      shopFilter = { shop: shopId }
-    }
+    const { query: shopFilter } = await buildTenantQuery(req, shopId)
 
     const totalSalesData = await Sale.aggregate([
       { $match: shopFilter },
@@ -61,9 +55,8 @@ export const getShopWiseStats = async (req, res) => {
 
 export const getCategorySales = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("shop role")
-    let shopFilter = {}
-    if (user.role === "manager") shopFilter = { shop: user.shop }
+    const tenant = await getUserTenant(req)
+    const shopFilter = tenant.isGlobal ? {} : { shop: tenant.shopId }
 
     const categorySales = await Sale.aggregate([
       { $match: shopFilter },

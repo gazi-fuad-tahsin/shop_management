@@ -20,7 +20,7 @@ interface Product {
   sku: string
   barcode?: string
   description?: string
-  category?: string
+  category?: string | { _id?: string; name?: string; description?: string; isActive?: boolean }
   supplier?: string
   costPrice: number
   retailPrice: number
@@ -94,7 +94,10 @@ export function EnhancedProductDialog({
       fetchCategories()
       fetchSuppliers()
       if (product) {
-        setFormData(product)
+        setFormData({
+          ...product,
+          category: typeof product.category === "object" ? product.category?._id || "" : product.category || "",
+        })
       } else {
         setFormData({
           name: "",
@@ -224,7 +227,7 @@ export function EnhancedProductDialog({
               <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>
                 <Select
-                  value={formData.category || ""}
+                  value={typeof formData.category === "object" ? formData.category?._id || "" : formData.category || ""}
                   onValueChange={(value) => setFormData({ ...formData, category: value })}
                 >
                   <SelectTrigger>

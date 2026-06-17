@@ -37,4 +37,7 @@ const inventorySchema = new mongoose.Schema(
   { timestamps: true },
 )
 
+inventorySchema.index({ shop: 1, product: 1 })
+inventorySchema.index({ shop: 1, updatedAt: -1 })
+
 export default mongoose.model("Inventory", inventorySchema)

@@ -12,6 +12,6 @@ const router = express.Router()
 router.get("/", verifyToken, getInventory)
 router.get("/product/:productId", verifyToken, getInventoryByProduct)
 router.put("/:id", verifyToken, updateInventory)
-router.post("/", verifyToken, authorizeRole(["admin", "manager"]), createInventory)
+router.post("/", verifyToken, authorizeRole(["super_admin", "admin", "manager"]), createInventory)
 
 export default router

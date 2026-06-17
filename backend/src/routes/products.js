@@ -15,8 +15,8 @@ const router = express.Router()
 router.get("/", verifyToken, getProducts)
 router.get("/barcode/:barcode", verifyToken, getProductByBarcode)
 router.get("/:id", verifyToken, getProductById)
-router.post("/", verifyToken, authorizeRole(["admin", "manager"]), createProduct)
-router.put("/:id", verifyToken, authorizeRole(["admin", "manager"]), updateProduct)
-router.delete("/:id", verifyToken, authorizeRole(["admin", "manager"]), deleteProduct)
+router.post("/", verifyToken, authorizeRole(["super_admin", "admin", "manager"]), createProduct)
+router.put("/:id", verifyToken, authorizeRole(["super_admin", "admin", "manager"]), updateProduct)
+router.delete("/:id", verifyToken, authorizeRole(["super_admin", "admin", "manager"]), deleteProduct)
 
 export default router

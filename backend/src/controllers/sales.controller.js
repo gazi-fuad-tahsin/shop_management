@@ -2,16 +2,13 @@ import Sale from "../models/Sale.js"
 import Product from "../models/Product.js"
 import Inventory from "../models/Inventory.js"
 import User from "../models/User.js"
+import { assertTenantAccess, buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
 export const getSales = async (req, res) => {
   try {
     const { page = 1, limit = 50, startDate, endDate, shopId } = req.query
     const skip = (page - 1) * limit
-    const user = await User.findById(req.user.id).select("shop role")
-
-    const query = {}
-    if (user.role !== "admin") query.shop = user.shop
-    else if (shopId) query.shop = shopId
+    const { query } = await buildTenantQuery(req, shopId)
 
     if (startDate || endDate) {
       query.createdAt = {}
@@ -38,11 +35,8 @@ export const getSales = async (req, res) => {
 export const getSalesRange = async (req, res) => {
   try {
     const { startDate, endDate, shopId } = req.query
-    const user = await User.findById(req.user.id).select("shop role")
-
-    const query = { createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) } }
-    if (user.role !== "admin") query.shop = user.shop
-    else if (shopId) query.shop = shopId
+    const tenant = await buildTenantQuery(req, shopId, { createdAt: { $gte: new Date(startDate), $lte: new Date(endDate) } })
+    const query = tenant.query
 
     const sales = await Sale.find(query).populate("items.product").populate("soldBy").populate("shop", "name")
     res.json(sales)
@@ -86,8 +80,11 @@ export const createSale = async (req, res) => {
       }
     }
 
-    const user = await User.findById(req.user.id).select("shop")
-    if (!user.shop) {
+    const tenant = await getUserTenant(req)
+    if (tenant.isGlobal) {
+      return res.status(400).json({ message: "Super admin must create sales through a shop account" })
+    }
+    if (!tenant.shopId) {
       return res.status(400).json({ message: "You must be assigned to a shop" })
     }
 
@@ -97,16 +94,16 @@ export const createSale = async (req, res) => {
     for (const item of items) {
       let product
       if (item.productId) product = await Product.findById(item.productId)
-      else if (item.barcode) product = await Product.findOne({ barcode: item.barcode, shop: user.shop })
+      else if (item.barcode) product = await Product.findOne({ barcode: item.barcode, shop: tenant.shopId })
 
       if (!product) {
         return res.status(404).json({ message: `Product not found for item: ${item.barcode || item.productId}` })
       }
-      if (product.shop.toString() !== user.shop.toString()) {
+      if (product.shop.toString() !== tenant.shopId.toString()) {
         return res.status(403).json({ message: `Product ${product.name} does not belong to your shop` })
       }
 
-      const inventory = await Inventory.findOne({ product: product._id, shop: user.shop })
+      const inventory = await Inventory.findOne({ product: product._id, shop: tenant.shopId })
       if (!inventory || inventory.quantity < item.quantity) {
         return res.status(400).json({ message: `Insufficient stock for ${product.name}. Available: ${inventory?.quantity || 0}` })
       }
@@ -125,7 +122,7 @@ export const createSale = async (req, res) => {
     }
 
     const sale = new Sale({
-      shop: user.shop,
+      shop: tenant.shopId,
       saleNumber,
       items: populatedItems,
       customer: customerId,
@@ -151,7 +148,7 @@ export const createSale = async (req, res) => {
     await sale.save()
 
     for (const item of populatedItems) {
-      await Inventory.findOneAndUpdate({ product: item.product, shop: user.shop }, { $inc: { quantity: -item.quantity } })
+      await Inventory.findOneAndUpdate({ product: item.product, shop: tenant.shopId }, { $inc: { quantity: -item.quantity } })
     }
 
     if (customerId) {
@@ -172,9 +169,16 @@ export const createSale = async (req, res) => {
 
 export const updateSale = async (req, res) => {
   try {
-    const sale = await Sale.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate("items.product customer soldBy")
+    const sale = await Sale.findById(req.params.id)
     if (!sale) return res.status(404).json({ message: "Sale not found" })
-    res.json(sale)
+    const tenant = await getUserTenant(req)
+    if (!assertTenantAccess(sale.shop, tenant)) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+    const updates = { ...req.body }
+    delete updates.shop
+    const updatedSale = await Sale.findByIdAndUpdate(req.params.id, updates, { new: true }).populate("items.product customer soldBy")
+    res.json(updatedSale)
   } catch (error) {
     res.status(500).json({ message: error.message })
   }

@@ -1,6 +1,13 @@
 import jwt from "jsonwebtoken"
+import User from "../models/User.js"
+import Shop from "../models/Shop.js"
 
-export const verifyToken = (req, res, next) => {
+const hasPaidShopAccess = (shop) => {
+  if (!shop) return false
+  return shop.status === "active" && shop.paymentStatus === "paid" && shop.subscriptionStatus === "active"
+}
+
+export const verifyToken = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1]
 
   if (!token) {
@@ -10,6 +17,17 @@ export const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     req.user = decoded
+    const user = await User.findById(decoded.id).select("-password").populate("shop mainShop branchShop")
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: "User is inactive or no longer exists" })
+    }
+    if (user.role !== "super_admin") {
+      const accessShop = user.shop || user.mainShop
+      if (!hasPaidShopAccess(accessShop)) {
+        return res.status(403).json({ message: "Shop subscription is not active or paid" })
+      }
+    }
+    req.currentUser = user
     next()
   } catch (error) {
     res.status(401).json({ message: "Invalid token" })
@@ -18,9 +36,43 @@ export const verifyToken = (req, res, next) => {
 
 export const authorizeRole = (roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    const allowedRoles = Array.isArray(roles) ? roles : [roles]
+    if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ message: "Unauthorized" })
     }
     next()
   }
+}
+
+export const requireSuperAdmin = authorizeRole(["super_admin"])
+
+export const attachCurrentUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password").populate("shop mainShop branchShop")
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: "User is inactive or no longer exists" })
+    }
+
+    if (user.role !== "super_admin") {
+      const accessShop = user.shop || user.mainShop
+      const shop = await Shop.findById(accessShop?._id || accessShop)
+      if (!hasPaidShopAccess(shop)) {
+        return res.status(403).json({ message: "Shop subscription is not active or paid" })
+      }
+    }
+
+    req.currentUser = user
+    next()
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+export const getScopedShopId = async (req, requestedShopId) => {
+  if (req.user.role === "super_admin") {
+    return requestedShopId || null
+  }
+
+  const user = req.currentUser || (await User.findById(req.user.id).select("shop mainShop role"))
+  return user?.shop?._id || user?.shop || user?.mainShop?._id || user?.mainShop || null
 }

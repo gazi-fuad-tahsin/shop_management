@@ -2,6 +2,7 @@ import Sale from "../models/Sale.js"
 import Product from "../models/Product.js"
 import User from "../models/User.js"
 import PreviousCash from "../models/PreviousCash.js"
+import { getUserTenant } from "../utils/tenant.js"
 
 const getDayRange = (dateInput) => {
   const date = dateInput ? new Date(dateInput) : new Date()
@@ -13,7 +14,7 @@ const getDayRange = (dateInput) => {
 }
 
 const getShopIdForUser = async (userId, role, shopParam) => {
-  if (role === "admin" && shopParam) return shopParam
+  if (role === "super_admin" && shopParam) return shopParam
   const user = await User.findById(userId).select("shop")
   return user?.shop
 }

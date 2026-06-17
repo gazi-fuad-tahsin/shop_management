@@ -12,7 +12,7 @@ const getMonthRange = (monthInput) => {
 }
 
 const getShopIdForUser = async (userId, role, shopParam) => {
-  if (role === "admin" && shopParam) return shopParam
+  if (role === "super_admin" && shopParam) return shopParam
   const user = await User.findById(userId).select("shop")
   return user?.shop
 }
@@ -36,7 +36,7 @@ export const getMonthlyReport = async (req, res) => {
     const { month, paymentType, shopId } = req.query
     const { start, end } = getMonthRange(month)
     const shop = await getShopIdForUser(req.user.id, req.user.role, shopId)
-    if (!shop && req.user.role !== "admin") {
+    if (!shop && req.user.role !== "super_admin") {
       return res.status(400).json({ message: "Shop not found for this user" })
     }
 

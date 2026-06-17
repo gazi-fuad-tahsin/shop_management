@@ -41,4 +41,7 @@ const customerSchema = new mongoose.Schema(
   { timestamps: true },
 )
 
+customerSchema.index({ shop: 1, phone: 1 })
+customerSchema.index({ shop: 1, email: 1 })
+
 export default mongoose.model("Customer", customerSchema)

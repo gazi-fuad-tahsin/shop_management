@@ -9,9 +9,10 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       lowercase: true,
+      trim: true,
     },
     password: {
       type: String,
@@ -20,14 +21,44 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "manager", "staff"],
+      enum: ["super_admin", "admin", "manager", "staff"],
       default: "staff",
     },
-    phone: String,
+    phone: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    requestNote: String,
     address: String,
     shop: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Shop",
+    },
+    mainShop: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      index: true,
+    },
+    branchShop: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      index: true,
+    },
+    adminOwner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+    managerStatus: {
+      type: String,
+      enum: ["none", "pending", "approved", "rejected"],
+      default: "none",
+    },
+    branchSetupStatus: {
+      type: String,
+      enum: ["not_required", "pending", "completed"],
+      default: "not_required",
     },
     isActive: {
       type: Boolean,
@@ -48,6 +79,13 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true },
 )
+
+userSchema.pre("validate", function (next) {
+  if (!this.email && !this.phone) {
+    return next(new Error("Email or phone is required"))
+  }
+  next()
+})
 
 // Hash password before saving
 userSchema.pre("save", async function (next) {

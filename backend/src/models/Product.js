@@ -89,5 +89,6 @@ const productSchema = new mongoose.Schema(
 
 // Compound unique index for sku within each shop
 productSchema.index({ shop: 1, sku: 1 }, { unique: true })
+productSchema.index({ shop: 1, category: 1 })
 
 export default mongoose.model("Product", productSchema)

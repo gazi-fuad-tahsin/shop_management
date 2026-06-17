@@ -443,7 +443,7 @@ export default function POSPage() {
               ) : (
                 <div className="space-y-2">
                   <Select
-                    value={selectedCustomer?._id || ""}
+                    value=""
                     onValueChange={(value) => {
                       const customer = customers.find((c) => c._id === value)
                       setSelectedCustomer(customer || null)

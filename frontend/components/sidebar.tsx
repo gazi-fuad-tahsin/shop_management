@@ -8,19 +8,20 @@ import { getNavigationItems } from "@/components/navigation"
 
 interface SidebarProps {
   user: {
-    role: "admin" | "manager" | "staff"
+    role: "super_admin" | "admin" | "manager" | "staff"
   }
 }
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
   const navigationItems = getNavigationItems(user.role)
+  const homeHref = user.role === "super_admin" ? "/super-admin" : "/dashboard"
 
   return (
     <div className="hidden h-full flex-col border-b border-border bg-card md:flex md:w-64 md:border-b-0 md:border-r">
       <div className="flex items-center justify-center border-b border-borderpy-6">
         <Link
-          href="/dashboard"
+          href={homeHref}
           className="group inline-flex items-center justify-center transition-transform duration-200 hover:-translate-y-0.5"
           aria-label="Go to dashboard"
         >

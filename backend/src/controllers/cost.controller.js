@@ -13,7 +13,7 @@ const getDayRange = (dateInput) => {
 }
 
 const getShopIdForUser = async (userId, role, shopParam) => {
-  if (role === "admin" && shopParam) return shopParam
+  if (role === "super_admin" && shopParam) return shopParam
   const user = await User.findById(userId).select("shop")
   return user?.shop
 }
@@ -95,7 +95,7 @@ export const getCosts = async (req, res) => {
     const user = await User.findById(req.user.id).select("shop role")
     const query = { date: { $gte: start, $lte: end } }
 
-    if (user.role === "admin") {
+    if (user.role === "super_admin") {
       if (shopId) query.shop = shopId
     } else {
       if (!user.shop) return res.status(400).json({ message: "Shop not found for this user" })
@@ -117,7 +117,7 @@ export const updateCost = async (req, res) => {
     if (!cost) return res.status(404).json({ message: "Cost entry not found" })
 
     const user = await User.findById(req.user.id).select("shop role")
-    if (user.role !== "admin" && cost.shop.toString() !== user.shop?.toString()) {
+    if (user.role !== "super_admin" && cost.shop.toString() !== user.shop?.toString()) {
       return res.status(403).json({ message: "Access denied" })
     }
 

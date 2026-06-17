@@ -50,7 +50,7 @@ export function UserDialog({ open, onOpenChange, user, onSuccess }: UserDialogPr
     setIsLoading(true)
 
     try {
-      const url = user ? `/api/users/${user._id}` : "/api/auth/register"
+      const url = user ? `/api/users/${user._id}` : "/api/users"
       const method = user ? "PUT" : "POST"
       const body = user ? formData : { ...formData, password: "TemporaryPassword123!" }
 

@@ -2,6 +2,11 @@ import mongoose from "mongoose"
 
 const supplierSchema = new mongoose.Schema(
   {
+    shop: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shop",
+      required: true,
+    },
     name: {
       type: String,
       required: true,
@@ -20,5 +25,7 @@ const supplierSchema = new mongoose.Schema(
   },
   { timestamps: true },
 )
+
+supplierSchema.index({ shop: 1, name: 1 })
 
 export default mongoose.model("Supplier", supplierSchema)

@@ -14,8 +14,13 @@ import dashboardRoutes from "./routes/dashboard.js"
 import revenueRoutes from "./routes/revenue.js"
 import costRoutes from "./routes/cost.js"
 import reportsRoutes from "./routes/reports.js"
+import onboardingRoutes from "./routes/onboarding.js"
+import superAdminRoutes from "./routes/super-admin.js"
+import paymentRoutes from "./routes/payments.js"
+import { handleStripeWebhook } from "./controllers/payments.controller.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 import { rateLimiter } from "./middleware/rateLimiter.js"
+import { seedSystemData } from "./utils/seed.js"
 
 dotenv.config()
 
@@ -24,10 +29,17 @@ const app = express()
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://shop-management-zapo.onrender.com","https://shop-management-kappa.vercel.app","https://vendastra-frontend.vercel.app"],
+    origin: [
+      "http://localhost:3000",
+      "https://shop-management-zapo.onrender.com",
+      "https://shop-management-kappa.vercel.app",
+      "https://vendastra-frontend.vercel.app",
+      process.env.FRONTEND_URL,
+    ].filter(Boolean),
     credentials: true,
   }),
 )
+app.post("/api/payments/webhook", express.raw({ type: "application/json" }), handleStripeWebhook)
 app.use(express.json())
 app.use(express.urlencoded({ limit: "50mb", extended: true }))
 
@@ -37,11 +49,17 @@ app.use(rateLimiter(100, 15 * 60 * 1000))
 // Database Connection
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB connected"))
+  .then(async () => {
+    console.log("MongoDB connected")
+    await seedSystemData()
+  })
   .catch((err) => console.log("MongoDB connection error:", err))
 
 // Routes
 app.use("/api/auth", authRoutes)
+app.use("/api/onboarding", onboardingRoutes)
+app.use("/api/payments", paymentRoutes)
+app.use("/api/super-admin", superAdminRoutes)
 app.use("/api/shops", shopRoutes)
 app.use("/api/products", productRoutes)
 app.use("/api/inventory", inventoryRoutes)

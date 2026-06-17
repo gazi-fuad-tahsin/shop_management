@@ -26,6 +26,8 @@ export function ShopDialog({ open, onOpenChange, onSuccess }: ShopDialogProps) {
     postalCode: "",
     phone: "",
     email: "",
+    businessType: "",
+    logo: "",
     taxId: "",
     currency: "USD",
     taxRate: 0,
@@ -64,6 +66,8 @@ export function ShopDialog({ open, onOpenChange, onSuccess }: ShopDialogProps) {
         postalCode: "",
         phone: "",
         email: "",
+        businessType: "",
+        logo: "",
         taxId: "",
         currency: "USD",
         taxRate: 0,
@@ -160,6 +164,26 @@ export function ShopDialog({ open, onOpenChange, onSuccess }: ShopDialogProps) {
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="businessType">Business Category</Label>
+            <Input
+              id="businessType"
+              value={formData.businessType}
+              onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+              placeholder="Retail, grocery, accessories"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="logo">Logo URL</Label>
+            <Input
+              id="logo"
+              value={formData.logo}
+              onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+              placeholder="https://..."
             />
           </div>
 

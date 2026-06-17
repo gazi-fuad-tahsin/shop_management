@@ -106,5 +106,6 @@ const saleSchema = new mongoose.Schema(
 
 // Compound unique index for saleNumber within each shop
 saleSchema.index({ shop: 1, saleNumber: 1 }, { unique: true })
+saleSchema.index({ shop: 1, createdAt: -1 })
 
 export default mongoose.model("Sale", saleSchema)

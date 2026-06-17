@@ -1,23 +1,19 @@
 import Product from "../models/Product.js"
 import User from "../models/User.js"
+import Category from "../models/Category.js"
+import { assertTenantAccess, buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
 export const getProducts = async (req, res) => {
   try {
     const { page = 1, limit = 50, search, category, shopId } = req.query
     const skip = (page - 1) * limit
 
-    const user = await User.findById(req.user.id).select("shop role")
-    if (!user.shop && user.role !== "admin") {
+    const tenant = await buildTenantQuery(req, shopId, { isActive: true })
+    if (!tenant.isGlobal && !tenant.shopId) {
       return res.status(403).json({ message: "You don't have a shop assigned" })
     }
 
-    const query = { isActive: true }
-
-    if (user.role !== "admin") {
-      query.shop = user.shop
-    } else if (shopId) {
-      query.shop = shopId
-    }
+    const query = tenant.query
 
     if (search) {
       query.$or = [{ name: new RegExp(search, "i") }, { sku: new RegExp(search, "i") }, { barcode: search }]
@@ -43,11 +39,11 @@ export const getProducts = async (req, res) => {
 
 export const getProductByBarcode = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("shop role")
+    const tenant = await getUserTenant(req)
 
     const query = { barcode: req.params.barcode, isActive: true }
-    if (user.role !== "admin") {
-      query.shop = user.shop
+    if (!tenant.isGlobal) {
+      query.shop = tenant.shopId
     }
 
     const product = await Product.findOne(query).populate("category", "name").populate("shop", "name")
@@ -64,7 +60,7 @@ export const getProductByBarcode = async (req, res) => {
 
 export const getProductById = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("shop role")
+    const tenant = await getUserTenant(req)
 
     const product = await Product.findById(req.params.id)
       .populate("category")
@@ -75,7 +71,7 @@ export const getProductById = async (req, res) => {
       return res.status(404).json({ message: "Product not found" })
     }
 
-    if (user.role !== "admin" && product.shop.toString() !== user.shop?.toString()) {
+    if (!assertTenantAccess(product.shop, tenant)) {
       return res.status(403).json({ message: "Access denied" })
     }
 
@@ -115,14 +111,24 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" })
     }
 
-    const user = await User.findById(req.user.id).select("shop role")
-    if (!user.shop && user.role !== "admin") {
+    const tenant = await getUserTenant(req)
+    if (!tenant.isGlobal && !tenant.shopId) {
       return res.status(400).json({ message: "You must be assigned to a shop first" })
     }
 
-    const shopId = user.role === "admin" ? req.body.shop : user.shop
+    const requestedShop = req.body.shop
+    const shopId = tenant.isGlobal
+      ? requestedShop
+      : requestedShop && tenant.accessibleShopIds?.some((id) => id?.toString() === requestedShop.toString())
+        ? requestedShop
+        : tenant.shopId
     if (!shopId) {
       return res.status(400).json({ message: "Shop is required" })
+    }
+
+    const categoryDoc = await Category.findById(category)
+    if (!categoryDoc || categoryDoc.shop.toString() !== shopId.toString()) {
+      return res.status(400).json({ message: "Category does not belong to this shop" })
     }
 
     if (await Product.findOne({ shop: shopId, sku })) {
@@ -168,13 +174,28 @@ export const createProduct = async (req, res) => {
 
 export const updateProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate(
-      "category createdBy",
-    )
-
+    const product = await Product.findById(req.params.id)
     if (!product) {
       return res.status(404).json({ message: "Product not found" })
     }
+
+    const tenant = await getUserTenant(req)
+    if (!assertTenantAccess(product.shop, tenant)) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+
+    const updates = { ...req.body }
+    delete updates.shop
+    if (updates.category) {
+      const categoryDoc = await Category.findById(updates.category)
+      if (!categoryDoc || categoryDoc.shop.toString() !== product.shop.toString()) {
+        return res.status(400).json({ message: "Category does not belong to this shop" })
+      }
+    }
+
+    Object.assign(product, updates)
+    await product.save()
+    await product.populate("category createdBy shop")
 
     res.json(product)
   } catch (error) {
@@ -184,7 +205,14 @@ export const updateProduct = async (req, res) => {
 
 export const deleteProduct = async (req, res) => {
   try {
-    await Product.findByIdAndUpdate(req.params.id, { isActive: false })
+    const product = await Product.findById(req.params.id)
+    if (!product) return res.status(404).json({ message: "Product not found" })
+    const tenant = await getUserTenant(req)
+    if (!assertTenantAccess(product.shop, tenant)) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+    product.isActive = false
+    await product.save()
     res.json({ message: "Product deleted" })
   } catch (error) {
     res.status(500).json({ message: error.message })
