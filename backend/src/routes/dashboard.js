@@ -5,7 +5,7 @@ import { getCategorySales, getDashboardStats, getRevenueByShop, getShopWiseStats
 const router = express.Router()
 
 router.get("/stats", verifyToken, getDashboardStats)
-router.get("/shop-wise", verifyToken, authorizeRole(["super_admin"]), getShopWiseStats)
+router.get("/shop-wise", verifyToken, authorizeRole(["super_admin", "admin"]), getShopWiseStats)
 router.get("/category-sales", verifyToken, getCategorySales)
 router.get("/revenue-by-shop", verifyToken, authorizeRole(["super_admin"]), getRevenueByShop)
 

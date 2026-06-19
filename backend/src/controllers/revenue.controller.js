@@ -1,8 +1,8 @@
 import Sale from "../models/Sale.js"
 import Product from "../models/Product.js"
-import User from "../models/User.js"
 import PreviousCash from "../models/PreviousCash.js"
-import { getUserTenant } from "../utils/tenant.js"
+import DailyCost from "../models/DailyCost.js"
+import { buildTenantQuery, resolveTenantShopId } from "../utils/tenant.js"
 
 const getDayRange = (dateInput) => {
   const date = dateInput ? new Date(dateInput) : new Date()
@@ -11,12 +11,6 @@ const getDayRange = (dateInput) => {
   const end = new Date(date)
   end.setHours(23, 59, 59, 999)
   return { start, end }
-}
-
-const getShopIdForUser = async (userId, role, shopParam) => {
-  if (role === "super_admin" && shopParam) return shopParam
-  const user = await User.findById(userId).select("shop")
-  return user?.shop
 }
 
 const getSaleDistribution = (sale) => {
@@ -28,14 +22,59 @@ const getSaleDistribution = (sale) => {
   return { cash: 0, bank: Number(sale.totalAmount || 0) }
 }
 
+const withShopFilter = (query, shopFilter) => {
+  if (shopFilter !== undefined) query.shop = shopFilter
+  return query
+}
+
+const ensureBranch = (branchMap, shop) => {
+  const id = (shop?._id || shop)?.toString()
+  if (!id) return null
+  if (!branchMap.has(id)) {
+    branchMap.set(id, {
+      shop: shop?._id || shop,
+      shopName: shop?.name || "Shop",
+      totalRevenue: 0,
+      totalCostPrice: 0,
+      totalProfit: 0,
+      totalExpenses: 0,
+      previousCash: 0,
+      totalCashRevenue: 0,
+      totalBankRevenue: 0,
+      totalCashAmount: 0,
+      totalBankAmount: 0,
+      grandTotal: 0,
+      netRevenue: 0,
+      salesCount: 0,
+    })
+  }
+  return branchMap.get(id)
+}
+
 export const getTodayRevenue = async (req, res) => {
   try {
-    const { date, shopId, paymentType } = req.query
+    const { date, shopId, paymentType, category, type } = req.query
     const { start, end } = getDayRange(date)
-    const shop = await getShopIdForUser(req.user.id, req.user.role, shopId)
-    if (!shop) return res.status(400).json({ message: "Shop not found for this user" })
+    const tenant = await buildTenantQuery(req, shopId, {})
+    const shopFilter = tenant.query.shop
 
-    const sales = await Sale.find({ shop, paymentStatus: "completed", createdAt: { $gte: start, $lte: end } }).lean()
+    const [sales, dailyCosts, previousCashEntries] = await Promise.all([
+      Sale.find(withShopFilter({ paymentStatus: "completed", createdAt: { $gte: start, $lte: end } }, shopFilter)).populate("shop", "name").lean(),
+      DailyCost.find(
+        withShopFilter(
+          {
+            date: { $gte: start, $lte: end },
+            ...(category ? { category } : {}),
+            ...(type && type !== "all" ? { type } : {}),
+          },
+          shopFilter,
+        ),
+      )
+        .populate("shop", "name")
+        .lean(),
+      PreviousCash.find(withShopFilter({ date: { $gte: start, $lte: end } }, shopFilter)).populate("shop", "name").lean(),
+    ])
+
     const productIds = [...new Set(sales.flatMap((sale) => sale.items.map((item) => item.product?.toString()).filter(Boolean)))]
     const products = await Product.find({ _id: { $in: productIds } }).select("_id costPrice").lean()
     const productCostMap = new Map(products.map((p) => [p._id.toString(), p.costPrice || 0]))
@@ -45,39 +84,97 @@ export const getTodayRevenue = async (req, res) => {
     let totalProfit = 0
     let totalCashRevenue = 0
     let totalBankRevenue = 0
+    const branchMap = new Map()
 
-    const itemsBreakdown = sales.flatMap((sale) =>
-      sale.items.map((item) => {
-        const unitCost = productCostMap.get(item.product.toString()) || 0
-        const itemCost = unitCost * item.quantity
-        const itemSell = item.subtotal || item.unitPrice * item.quantity
+    const itemsBreakdown = sales.flatMap((sale) => {
+      const branch = ensureBranch(branchMap, sale.shop)
+      const { cash, bank } = getSaleDistribution(sale)
+      if (paymentType === "cash" && cash <= 0) return []
+      if (paymentType === "bank" && bank <= 0) return []
+
+      totalCashRevenue += cash
+      totalBankRevenue += bank
+      if (branch) {
+        branch.totalCashRevenue += cash
+        branch.totalBankRevenue += bank
+        branch.salesCount += 1
+      }
+
+      return sale.items.map((item) => {
+        const unitCost = productCostMap.get(item.product?.toString()) || 0
+        const itemCost = unitCost * Number(item.quantity || 0)
+        const itemSell = Number(item.subtotal || item.unitPrice * item.quantity || 0)
         const itemProfit = itemSell - itemCost
+
         totalSellingPrice += itemSell
         totalCostPrice += itemCost
         totalProfit += itemProfit
-        return { productId: item.product, productName: item.productName, quantity: item.quantity, costPrice: Number(itemCost.toFixed(2)), sellingPrice: Number(itemSell.toFixed(2)), profit: Number(itemProfit.toFixed(2)) }
-      }),
-    )
+        if (branch) {
+          branch.totalRevenue += itemSell
+          branch.totalCostPrice += itemCost
+          branch.totalProfit += itemProfit
+        }
 
-    for (const sale of sales) {
-      const { cash, bank } = getSaleDistribution(sale)
-      if (paymentType === "cash" && cash <= 0) continue
-      if (paymentType === "bank" && bank <= 0) continue
-      totalCashRevenue += cash
-      totalBankRevenue += bank
+        return {
+          productId: item.product,
+          productName: item.productName,
+          quantity: item.quantity,
+          costPrice: Number(itemCost.toFixed(2)),
+          sellingPrice: Number(itemSell.toFixed(2)),
+          profit: Number(itemProfit.toFixed(2)),
+          shop: sale.shop?._id || sale.shop,
+        }
+      })
+    })
+
+    const totalExpenses = dailyCosts.reduce((sum, cost) => {
+      const branch = ensureBranch(branchMap, cost.shop)
+      const amount = Number(cost.amount || 0)
+      if (branch) branch.totalExpenses += amount
+      return sum + amount
+    }, 0)
+
+    const previousCash = previousCashEntries.reduce((sum, entry) => {
+      const branch = ensureBranch(branchMap, entry.shop)
+      const amount = Number(entry.amount || 0)
+      if (branch) branch.previousCash += amount
+      return sum + amount
+    }, 0)
+
+    for (const branch of branchMap.values()) {
+      branch.totalCashAmount = branch.previousCash + branch.totalCashRevenue
+      branch.totalBankAmount = branch.totalBankRevenue
+      branch.grandTotal = branch.totalCashAmount + branch.totalBankAmount
+      branch.netRevenue = branch.totalProfit - branch.totalExpenses
+      for (const key of [
+        "totalRevenue",
+        "totalCostPrice",
+        "totalProfit",
+        "totalExpenses",
+        "previousCash",
+        "totalCashRevenue",
+        "totalBankRevenue",
+        "totalCashAmount",
+        "totalBankAmount",
+        "grandTotal",
+        "netRevenue",
+      ]) {
+        branch[key] = Number(branch[key].toFixed(2))
+      }
     }
 
-    const previousCashAgg = await PreviousCash.aggregate([{ $match: { shop, date: { $gte: start, $lte: end } } }, { $group: { _id: null, total: { $sum: "$amount" } } }])
-    const previousCash = previousCashAgg[0]?.total || 0
     const totalCashAmount = previousCash + totalCashRevenue
     const grandTotal = totalCashAmount + totalBankRevenue
+    const netRevenue = totalProfit - totalExpenses
 
     res.json({
       date: start,
       totalRevenue: Number(totalSellingPrice.toFixed(2)),
       totalCostPrice: Number(totalCostPrice.toFixed(2)),
       totalSellingPrice: Number(totalSellingPrice.toFixed(2)),
+      totalExpenses: Number(totalExpenses.toFixed(2)),
       totalProfit: Number(totalProfit.toFixed(2)),
+      netRevenue: Number(netRevenue.toFixed(2)),
       previousCash: Number(previousCash.toFixed(2)),
       totalCashRevenue: Number(totalCashRevenue.toFixed(2)),
       totalBankRevenue: Number(totalBankRevenue.toFixed(2)),
@@ -86,6 +183,7 @@ export const getTodayRevenue = async (req, res) => {
       grandTotal: Number(grandTotal.toFixed(2)),
       salesCount: sales.length,
       itemsBreakdown,
+      branchBreakdown: [...branchMap.values()].sort((a, b) => a.shopName.localeCompare(b.shopName)),
     })
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -99,11 +197,12 @@ export const addPreviousCash = async (req, res) => {
       return res.status(400).json({ message: "Valid amount is required" })
     }
 
-    const shop = await getShopIdForUser(req.user.id, req.user.role, shopId)
-    if (!shop) return res.status(400).json({ message: "Shop not found for this user" })
+    const { shopId: resolvedShopId } = await resolveTenantShopId(req, shopId)
+    if (!resolvedShopId) return res.status(403).json({ message: "Shop not found or access denied" })
 
     const { start } = getDayRange(date)
-    const entry = await PreviousCash.create({ shop, amount: Number(amount), date: start, note, createdBy: req.user.id })
+    const entry = await PreviousCash.create({ shop: resolvedShopId, amount: Number(amount), date: start, note, createdBy: req.user.id })
+    await entry.populate("shop", "name")
     res.status(201).json(entry)
   } catch (error) {
     res.status(500).json({ message: error.message })

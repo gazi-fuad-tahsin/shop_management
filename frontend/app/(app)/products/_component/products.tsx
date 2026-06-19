@@ -33,11 +33,20 @@ interface Shop {
   name: string
 }
 
+interface Category {
+  _id: string
+  name: string
+}
+
 export default function ProductsPage() {
   const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [shops, setShops] = useState<Shop[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [selectedShop, setSelectedShop] = useState("all")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [minPrice, setMinPrice] = useState("")
+  const [maxPrice, setMaxPrice] = useState("")
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -46,11 +55,12 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (user?.role === "admin") fetchShops()
+    fetchCategories()
   }, [user?.role])
 
   useEffect(() => {
     fetchProducts()
-  }, [selectedShop, user?.role])
+  }, [selectedShop, selectedCategory, minPrice, maxPrice, user?.role])
 
   const fetchShops = async () => {
     const response = await apiCall("/api/shops")
@@ -58,10 +68,20 @@ export default function ProductsPage() {
     setShops(data || [])
   }
 
+  const fetchCategories = async () => {
+    const response = await apiCall("/api/categories?type=product")
+    if (response.ok) setCategories(await response.json())
+  }
+
   const fetchProducts = async () => {
     try {
       setIsLoading(true)
-      const query = user?.role === "admin" && selectedShop !== "all" ? `?shopId=${selectedShop}` : ""
+      const params = new URLSearchParams()
+      if (user?.role === "admin" && selectedShop !== "all") params.set("shopId", selectedShop)
+      if (selectedCategory !== "all") params.set("category", selectedCategory)
+      if (minPrice) params.set("minPrice", minPrice)
+      if (maxPrice) params.set("maxPrice", maxPrice)
+      const query = params.toString() ? `?${params.toString()}` : ""
       const response = await apiCall(`/api/products${query}`)
       const data = await response.json()
       const baseProducts = data.products || data
@@ -156,6 +176,20 @@ export default function ProductsPage() {
                 </SelectContent>
               </Select>
             )}
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category._id} value={category._id}>{category.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input className="w-[130px]" type="number" placeholder="Min price" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} />
+            <Input className="w-[130px]" type="number" placeholder="Max price" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} />
+            <Button variant="outline" onClick={() => { setSearchTerm(""); setSelectedShop("all"); setSelectedCategory("all"); setMinPrice(""); setMaxPrice("") }}>
+              Reset
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

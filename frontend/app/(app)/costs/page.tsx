@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { apiCall } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,14 @@ interface CostEntry {
     _id: string
     name: string
   }
+  type?: string
+  category?: { _id: string; name: string; type?: string }
+}
+
+interface CostCategory {
+  _id: string
+  name: string
+  type?: string
 }
 
 interface CostListResponse {
@@ -41,6 +49,13 @@ interface CostTodayResponse {
   totalCostPrice: number
   grossProfit: number
   netProfitLoss: number
+  branchBreakdown?: Array<{
+    shop: string
+    shopName: string
+    totalDailyCost: number
+    netProfitLoss: number
+    entriesCount: number
+  }>
 }
 
 const getTodayString = () => {
@@ -51,11 +66,16 @@ const getTodayString = () => {
 
 export default function CostsPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [shops, setShops] = useState<Shop[]>([])
   const [selectedShop, setSelectedShop] = useState("all")
+  const [costType, setCostType] = useState("all")
+  const [filterCategory, setFilterCategory] = useState("all")
   const [selectedDate, setSelectedDate] = useState(getTodayString())
   const [costTitle, setCostTitle] = useState("")
   const [costAmount, setCostAmount] = useState("")
+  const [costCategory, setCostCategory] = useState("")
+  const [categories, setCategories] = useState<CostCategory[]>([])
   const [costData, setCostData] = useState<CostListResponse | null>(null)
   const [todaySummary, setTodaySummary] = useState<CostTodayResponse | null>(null)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
@@ -64,12 +84,26 @@ export default function CostsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const [editAmount, setEditAmount] = useState("")
+  const [editCategory, setEditCategory] = useState("")
+  const [formError, setFormError] = useState("")
 
-  if (user && user.role === "staff") {
-    redirect("/dashboard")
-  }
+  const requiresShopSelection = false
 
-  const requiresShopSelection = user?.role === "admin" && selectedShop === "all"
+  const costCategories = useMemo(
+    () => categories.filter((category) => category.type !== "product"),
+    [categories],
+  )
+  const typeOptions = useMemo(
+    () => Array.from(new Set(costCategories.map((category) => category.type || "general"))).sort(),
+    [costCategories],
+  )
+  const visibleCategories = useMemo(
+    () =>
+      costType === "all"
+        ? costCategories
+        : costCategories.filter((category) => (category.type || "general") === costType),
+    [costCategories, costType],
+  )
 
   const fetchShops = async () => {
     if (user?.role !== "admin") return
@@ -77,6 +111,13 @@ export default function CostsPage() {
     if (!response.ok) return
     const data = await response.json()
     setShops(data || [])
+  }
+
+  const fetchCategories = async () => {
+    const response = await apiCall("/api/categories")
+    if (!response.ok) return
+    const data = await response.json()
+    setCategories(Array.isArray(data) ? data : [])
   }
 
   const fetchData = async (options?: { initial?: boolean }) => {
@@ -92,9 +133,11 @@ export default function CostsPage() {
       if (user.role === "admin" && selectedShop !== "all") {
         params.set("shopId", selectedShop)
       }
+      if (costType !== "all") params.set("type", costType)
+      if (filterCategory !== "all") params.set("category", filterCategory)
 
       const listPromise = apiCall(`/api/v1/cost?${params.toString()}`)
-      const summaryPromise = requiresShopSelection ? null : apiCall(`/api/v1/cost/today?${params.toString()}`)
+      const summaryPromise = apiCall(`/api/v1/cost/today?${params.toString()}`)
 
       const [listRes, summaryRes] = await Promise.all([listPromise, summaryPromise])
       if (listRes.ok) {
@@ -121,8 +164,10 @@ export default function CostsPage() {
   }
 
   useEffect(() => {
+    if (!user) return
     fetchShops()
-  }, [user?.role])
+    fetchCategories()
+  }, [user, user?.role])
 
   useEffect(() => {
     fetchData({ initial: true })
@@ -131,34 +176,50 @@ export default function CostsPage() {
   useEffect(() => {
     if (!user) return
     fetchData()
-  }, [selectedDate, selectedShop])
+  }, [selectedDate, selectedShop, costType, filterCategory])
+
+  useEffect(() => {
+    if (filterCategory !== "all" && !visibleCategories.some((category) => category._id === filterCategory)) {
+      setFilterCategory("all")
+    }
+  }, [filterCategory, visibleCategories])
 
   const startEditing = (entry: CostEntry) => {
     setEditingId(entry._id)
     setEditTitle(entry.title)
     setEditAmount(String(entry.amount))
+    setEditCategory(entry.category?._id || "")
   }
 
   const cancelEditing = () => {
     setEditingId(null)
     setEditTitle("")
     setEditAmount("")
+    setEditCategory("")
   }
 
   const handleUpdateCost = async () => {
     if (!editingId) return
     const amount = Number(editAmount)
     if (!editTitle.trim() || Number.isNaN(amount) || amount < 0) return
+    if (!editCategory) {
+      setFormError("Cost category is required.")
+      return
+    }
 
     setIsSaving(true)
+    setFormError("")
     try {
+      const selectedCategory = costCategories.find((category) => category._id === editCategory)
       const response = await apiCall(`/api/v1/cost/${editingId}`, {
         method: "PUT",
-        body: JSON.stringify({
-          title: editTitle.trim(),
-          amount,
-          date: selectedDate,
-        }),
+          body: JSON.stringify({
+            title: editTitle.trim(),
+            amount,
+            date: selectedDate,
+            category: editCategory,
+            type: selectedCategory?.type || "general",
+          }),
       })
 
       if (!response.ok) {
@@ -177,14 +238,22 @@ export default function CostsPage() {
   const handleAddCost = async () => {
     const amount = Number(costAmount)
     if (!costTitle.trim() || Number.isNaN(amount) || amount < 0 || !user) return
+    if (!costCategory) {
+      setFormError("Cost category is required.")
+      return
+    }
     if (requiresShopSelection) return
 
     setIsSaving(true)
+    setFormError("")
     try {
+      const selectedCategory = costCategories.find((category) => category._id === costCategory)
       const body: Record<string, unknown> = {
         title: costTitle.trim(),
         amount,
         date: selectedDate,
+        category: costCategory,
+        type: selectedCategory?.type || "general",
       }
 
       if (user.role === "admin" && selectedShop !== "all") {
@@ -202,6 +271,7 @@ export default function CostsPage() {
 
       setCostTitle("")
       setCostAmount("")
+      setCostCategory("")
       await fetchData()
     } catch (error) {
       console.error("Failed to add cost:", error)
@@ -220,7 +290,7 @@ export default function CostsPage() {
     [costData?.totalAmount, todaySummary],
   )
 
-  if (isInitialLoading) {
+  if (user?.role === "staff" || isInitialLoading) {
     return <PageLoading compact />
   }
 
@@ -242,7 +312,7 @@ export default function CostsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label htmlFor="cost-date">Date</Label>
               <Input id="cost-date" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
@@ -265,6 +335,38 @@ export default function CostsPage() {
                 </Select>
               </div>
             )}
+            <div>
+              <Label>Type</Label>
+              <Select value={costType} onValueChange={setCostType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Cost type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {typeOptions.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Cost category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {visibleCategories.map((category) => (
+                    <SelectItem key={category._id} value={category._id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -289,6 +391,21 @@ export default function CostsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={costCategory} onValueChange={setCostCategory} disabled={requiresShopSelection}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {costCategories.map((category) => (
+                    <SelectItem key={category._id} value={category._id}>
+                      {category.name} ({category.type || "general"})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="cost-title">Title</Label>
               <Input
                 id="cost-title"
@@ -310,9 +427,13 @@ export default function CostsPage() {
                 disabled={requiresShopSelection}
               />
             </div>
-            <Button className="w-full" onClick={handleAddCost} disabled={isSaving || requiresShopSelection}>
+            <Button className="w-full" onClick={handleAddCost} disabled={isSaving || requiresShopSelection || !costCategories.length}>
               {isSaving ? "Saving..." : "Add Cost"}
             </Button>
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
+            {!costCategories.length && (
+              <p className="text-sm text-muted-foreground">Create an expense category first before adding costs.</p>
+            )}
             {requiresShopSelection && (
               <p className="text-sm text-muted-foreground">Select a shop first to add or review shop-specific profit data.</p>
             )}
@@ -346,6 +467,7 @@ export default function CostsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Title</TableHead>
+                      <TableHead>Category</TableHead>
                       {user?.role === "admin" && <TableHead>Shop</TableHead>}
                       <TableHead>Date</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
@@ -360,6 +482,24 @@ export default function CostsPage() {
                             <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
                           ) : (
                             entry.title
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingId === entry._id ? (
+                            <Select value={editCategory} onValueChange={setEditCategory}>
+                              <SelectTrigger className="min-w-[180px]">
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {costCategories.map((category) => (
+                                  <SelectItem key={category._id} value={category._id}>
+                                    {category.name} ({category.type || "general"})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            entry.category?.name || "-"
                           )}
                         </TableCell>
                         {user?.role === "admin" && <TableCell>{entry.shop?.name || "-"}</TableCell>}
@@ -404,6 +544,43 @@ export default function CostsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {todaySummary?.branchBreakdown?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Branch Cost Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Branch</TableHead>
+                    <TableHead className="text-right">Entries</TableHead>
+                    <TableHead className="text-right">Daily Cost</TableHead>
+                    <TableHead className="text-right">Net Profit/Loss</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {todaySummary.branchBreakdown.map((branch) => (
+                    <TableRow key={branch.shop}>
+                      <TableCell>{branch.shopName}</TableCell>
+                      <TableCell className="text-right">{branch.entriesCount}</TableCell>
+                      <TableCell className="text-right">${Number(branch.totalDailyCost || 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-right">${Number(branch.netProfitLoss || 0).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }
+  useEffect(() => {
+    if (user?.role === "staff") {
+      router.replace("/dashboard")
+    }
+  }, [user?.role, router])

@@ -25,19 +25,29 @@ type Shop = {
 export default function SuperAdminShopsPage() {
   const [shops, setShops] = useState<Shop[]>([])
   const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [paymentFilter, setPaymentFilter] = useState("all")
 
   const loadShops = async () => {
-    const response = await apiCall("/api/super-admin/shops")
+    const params = new URLSearchParams()
+    if (statusFilter !== "all") params.set("status", statusFilter)
+    if (search.trim()) params.set("search", search.trim())
+    const response = await apiCall(`/api/super-admin/shops?${params.toString()}`)
     if (response.ok) setShops(await response.json())
   }
 
   useEffect(() => {
     loadShops()
-  }, [])
+  }, [statusFilter])
 
   const filtered = useMemo(
-    () => shops.filter((shop) => [shop.name, shop.email, shop.phone, shop.owner?.name].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase())),
-    [shops, search],
+    () =>
+      shops.filter((shop) => {
+        const matchesSearch = [shop.name, shop.email, shop.phone, shop.owner?.name].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase())
+        const matchesPayment = paymentFilter === "all" || shop.paymentStatus === paymentFilter
+        return matchesSearch && matchesPayment
+      }),
+    [shops, search, paymentFilter],
   )
 
   const updateShop = async (shopId: string, updates: Partial<Shop>) => {
@@ -57,9 +67,29 @@ export default function SuperAdminShopsPage() {
       <Card>
         <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>All Shops</CardTitle>
-          <div className="flex w-full items-center gap-2 sm:w-80">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Search className="h-4 w-4 text-muted-foreground" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search shops" />
+            <Input className="w-72" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => event.key === "Enter" && loadShops()} placeholder="Search shops" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="suspended">Suspended</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+                <SelectItem value="unpaid">Unpaid</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">

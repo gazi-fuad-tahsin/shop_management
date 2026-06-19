@@ -3,9 +3,14 @@ import User from "../models/User.js"
 import Category from "../models/Category.js"
 import { assertTenantAccess, buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
+const categoryBelongsToShopScope = (categoryDoc, shopId) =>
+  categoryDoc?.shop?.toString() === shopId?.toString() ||
+  categoryDoc?.visibleToAllBranches ||
+  categoryDoc?.branchShops?.some((branchId) => branchId?.toString() === shopId?.toString())
+
 export const getProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search, category, shopId } = req.query
+    const { page = 1, limit = 50, search, category, shopId, minPrice, maxPrice } = req.query
     const skip = (page - 1) * limit
 
     const tenant = await buildTenantQuery(req, shopId, { isActive: true })
@@ -20,6 +25,11 @@ export const getProducts = async (req, res) => {
     }
     if (category) {
       query.category = category
+    }
+    if (minPrice || maxPrice) {
+      query.retailPrice = {}
+      if (minPrice) query.retailPrice.$gte = Number(minPrice)
+      if (maxPrice) query.retailPrice.$lte = Number(maxPrice)
     }
 
     const products = await Product.find(query)
@@ -39,12 +49,7 @@ export const getProducts = async (req, res) => {
 
 export const getProductByBarcode = async (req, res) => {
   try {
-    const tenant = await getUserTenant(req)
-
-    const query = { barcode: req.params.barcode, isActive: true }
-    if (!tenant.isGlobal) {
-      query.shop = tenant.shopId
-    }
+    const { query } = await buildTenantQuery(req, req.query.shopId, { barcode: req.params.barcode, isActive: true })
 
     const product = await Product.findOne(query).populate("category", "name").populate("shop", "name")
 
@@ -127,7 +132,7 @@ export const createProduct = async (req, res) => {
     }
 
     const categoryDoc = await Category.findById(category)
-    if (!categoryDoc || categoryDoc.shop.toString() !== shopId.toString()) {
+    if (!categoryBelongsToShopScope(categoryDoc, shopId)) {
       return res.status(400).json({ message: "Category does not belong to this shop" })
     }
 
@@ -188,7 +193,7 @@ export const updateProduct = async (req, res) => {
     delete updates.shop
     if (updates.category) {
       const categoryDoc = await Category.findById(updates.category)
-      if (!categoryDoc || categoryDoc.shop.toString() !== product.shop.toString()) {
+      if (!categoryBelongsToShopScope(categoryDoc, product.shop)) {
         return res.status(400).json({ message: "Category does not belong to this shop" })
       }
     }

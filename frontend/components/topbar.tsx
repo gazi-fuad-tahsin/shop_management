@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { LogOut, Menu, Store, User } from "lucide-react"
@@ -25,6 +24,7 @@ import {
 import { cn } from "@/lib/utils"
 import { getNavigationItems } from "@/components/navigation"
 import { BrandLoadingMark } from "@/components/page-loading"
+import { BrandLogo } from "@/components/brand-logo"
 
 interface TopbarProps {
   user: {
@@ -48,14 +48,14 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
 
   if (!user?.name) {
     return (
-      <div className="flex items-center justify-center h-16 px-4 md:px-6 bg-card border-b border-border">
+      <div className="flex items-center justify-center h-16 border-b border-cyan-950/10 bg-white/85 px-4 backdrop-blur-xl md:px-6">
         <BrandLoadingMark compact />
       </div>
     )
   }
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 md:px-6">
+    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cyan-950/10 bg-white/85 px-4 py-3 shadow-[0_12px_36px_rgba(8,31,68,0.05)] backdrop-blur-xl md:px-6">
       <div className="flex items-center gap-3 min-w-0">
         <div className="md:hidden">
           <Sheet open={mobileMenuOpen} onOpenChange={onMobileMenuOpenChange}>
@@ -63,21 +63,19 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 rounded-full border-border bg-background shadow-sm transition-transform duration-200 active:scale-95 hover:-translate-y-0.5"
+                className="h-10 w-10 rounded-md border-cyan-950/10 bg-white shadow-sm transition-transform duration-200 active:scale-95 hover:-translate-y-0.5"
                 aria-label="Open navigation menu"
               >
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
-              <SheetHeader className="border-b p-6">
+              <SheetHeader className="border-b bg-sidebar p-6 text-sidebar-foreground">
                 <div className="flex items-center gap-3">
-                  <div className="relative h-11 w-11 overflow-hidden rounded-2xl bg-muted/60 ring-1 ring-border">
-                    <Image src="/navbar.png" alt="ShopManager" fill sizes="44px" className="object-contain p-1.5" />
-                  </div>
+                  <BrandLogo variant="mark" size="md" />
                   <div className="min-w-0">
-                    <SheetTitle className="text-left">ShopManager</SheetTitle>
-                    <SheetDescription className="text-left">Navigate between dashboard sections.</SheetDescription>
+                    <SheetTitle className="text-left text-white">Vendastro</SheetTitle>
+                    <SheetDescription className="text-left text-cyan-100/70">Navigate between dashboard sections.</SheetDescription>
                   </div>
                 </div>
               </SheetHeader>
@@ -93,11 +91,11 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
                         href={item.href}
                         onClick={() => onMobileMenuOpenChange?.(false)}
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 hover:translate-x-1",
+                          "flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 hover:translate-x-1",
                           "animate-in fade-in slide-in-from-left-2",
                           isActive
                             ? "bg-primary text-primary-foreground shadow-sm"
-                            : "bg-transparent text-foreground hover:bg-accent",
+                            : "bg-transparent text-foreground hover:bg-cyan-50 hover:text-primary",
                         )}
                         style={{ animationDelay: `${index * 40}ms` }}
                       >
@@ -115,7 +113,7 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
           <h2 className="text-sm font-medium text-muted-foreground">Welcome back</h2>
           {shopName && user.role !== "super_admin" && (
             <div className="flex items-center gap-1 mt-1 text-xs text-foreground truncate">
-              <Store className="w-3 h-3" />
+              <Store className="h-3 w-3 text-cyan-600" />
               <span className="truncate">{shopName}</span>
             </div>
           )}
@@ -125,7 +123,7 @@ export function Topbar({ user, mobileMenuOpen, onMobileMenuOpenChange }: TopbarP
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-cyan-50 text-primary ring-1 ring-cyan-200">
               <User className="w-4 h-4" />
             </div>
             <div className="text-left">

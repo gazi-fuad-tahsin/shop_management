@@ -1,5 +1,6 @@
 import express from "express"
 import mongoose from "mongoose"
+import http from "http"
 import cors from "cors"
 import dotenv from "dotenv"
 import authRoutes from "./routes/auth.js"
@@ -14,6 +15,9 @@ import dashboardRoutes from "./routes/dashboard.js"
 import revenueRoutes from "./routes/revenue.js"
 import costRoutes from "./routes/cost.js"
 import reportsRoutes from "./routes/reports.js"
+import supplierRoutes from "./routes/suppliers.js"
+import chatRoutes from "./routes/chat.js"
+import feedbackRoutes from "./routes/feedback.js"
 import onboardingRoutes from "./routes/onboarding.js"
 import superAdminRoutes from "./routes/super-admin.js"
 import paymentRoutes from "./routes/payments.js"
@@ -21,10 +25,13 @@ import { handleStripeWebhook } from "./controllers/payments.controller.js"
 import { errorHandler } from "./middleware/errorHandler.js"
 import { rateLimiter } from "./middleware/rateLimiter.js"
 import { seedSystemData } from "./utils/seed.js"
+import { attachChatSocket } from "./utils/chat-socket.js"
 
 dotenv.config()
 
 const app = express()
+const server = http.createServer(app)
+attachChatSocket(server)
 
 // Middleware
 app.use(
@@ -44,7 +51,7 @@ app.use(express.json())
 app.use(express.urlencoded({ limit: "50mb", extended: true }))
 
 // Rate limiting middleware
-app.use(rateLimiter(100, 15 * 60 * 1000))
+// app.use(rateLimiter(100, 15 * 60 * 1000))
 
 // Database Connection
 mongoose
@@ -67,6 +74,9 @@ app.use("/api/sales", salesRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/categories", categoryRoutes)
 app.use("/api/customers", customerRoutes)
+app.use("/api/suppliers", supplierRoutes)
+app.use("/api/chat", chatRoutes)
+app.use("/api/feedback", feedbackRoutes)
 app.use("/api/dashboard", dashboardRoutes)
 app.use("/api/v1/revenue", revenueRoutes)
 app.use("/api/v1/cost", costRoutes)
@@ -86,6 +96,6 @@ app.use((req, res) => {
 })
 
 const PORT = process.env.PORT || 5000
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })

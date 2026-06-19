@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Trash2, Plus, AlertCircle, CheckCircle } from "lucide-react"
 import { apiCall } from "@/lib/api"
+import { InvoiceDialog } from "@/components/invoice-dialog"
 
 interface Product {
   _id: string
@@ -54,6 +55,7 @@ export default function POSPage() {
   const [success, setSuccess] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [showCustomerDialog, setShowCustomerDialog] = useState(false)
+  const [invoiceSaleId, setInvoiceSaleId] = useState<string | null>(null)
   const [newCustomerData, setNewCustomerData] = useState({ name: "", phone: "", email: "" })
   const barcodeRef = useRef<HTMLInputElement>(null)
 
@@ -290,6 +292,7 @@ export default function POSPage() {
 
       const sale = await response.json()
       setSuccess(`Sale completed! Invoice: ${sale.saleNumber}`)
+      setInvoiceSaleId(sale._id)
       setCartItems([])
       setSelectedCustomer(null)
       setPaymentSplits([{ id: "row-1", type: "cash", amount: 0 }])
@@ -608,6 +611,14 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <InvoiceDialog
+        open={!!invoiceSaleId}
+        saleId={invoiceSaleId}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceSaleId(null)
+        }}
+      />
     </div>
   )
 }

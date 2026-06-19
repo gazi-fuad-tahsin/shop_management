@@ -7,6 +7,15 @@ const hasPaidShopAccess = (shop) => {
   return shop.status === "active" && shop.paymentStatus === "paid" && shop.subscriptionStatus === "active"
 }
 
+const hasTenantAccess = (user) => {
+  const accessShop = user.shop || user.mainShop
+  if (!hasPaidShopAccess(accessShop)) return false
+  if (user.mainShop && accessShop?._id?.toString() !== user.mainShop?._id?.toString()) {
+    return hasPaidShopAccess(user.mainShop)
+  }
+  return true
+}
+
 export const verifyToken = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1]
 
@@ -22,8 +31,7 @@ export const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: "User is inactive or no longer exists" })
     }
     if (user.role !== "super_admin") {
-      const accessShop = user.shop || user.mainShop
-      if (!hasPaidShopAccess(accessShop)) {
+      if (!hasTenantAccess(user)) {
         return res.status(403).json({ message: "Shop subscription is not active or paid" })
       }
     }
@@ -56,7 +64,8 @@ export const attachCurrentUser = async (req, res, next) => {
     if (user.role !== "super_admin") {
       const accessShop = user.shop || user.mainShop
       const shop = await Shop.findById(accessShop?._id || accessShop)
-      if (!hasPaidShopAccess(shop)) {
+      const mainShop = user.mainShop ? await Shop.findById(user.mainShop?._id || user.mainShop) : null
+      if (!hasPaidShopAccess(shop) || (mainShop && shop?._id?.toString() !== mainShop?._id?.toString() && !hasPaidShopAccess(mainShop))) {
         return res.status(403).json({ message: "Shop subscription is not active or paid" })
       }
     }

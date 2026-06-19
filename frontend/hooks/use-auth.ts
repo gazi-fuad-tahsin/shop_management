@@ -28,7 +28,7 @@ export function useAuth() {
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
-  const fetchUserById = async (userId: string): Promise<User | null> => {
+  const fetchCurrentUser = async (): Promise<User | null> => {
     try {
       const response = await apiCall(`/api/auth/me`)
 
@@ -52,28 +52,36 @@ export function useAuth() {
     if (!mounted) return
 
     const loadUser = async () => {
+      const token = localStorage.getItem("token")
       const storedUser = localStorage.getItem("user")
 
-      if (!storedUser) {
+      if (!token) {
+        localStorage.removeItem("user")
+        setUser(null)
         setIsLoading(false)
-        router.push("/auth/login")
         return
       }
 
       try {
-        const parsedUser: User = JSON.parse(storedUser)
-        setUser(parsedUser)
+        if (storedUser) {
+          const parsedUser: User = JSON.parse(storedUser)
+          setUser(parsedUser)
+        }
 
-        // Refresh user data in background
-        const freshUser = await fetchUserById(parsedUser.id)
+        const freshUser = await fetchCurrentUser()
         if (freshUser) {
           setUser(freshUser)
           localStorage.setItem("user", JSON.stringify(freshUser))
+        } else {
+          localStorage.removeItem("token")
+          localStorage.removeItem("user")
+          setUser(null)
         }
       } catch (error) {
         console.error("Failed to parse user:", error)
+        localStorage.removeItem("token")
         localStorage.removeItem("user")
-        router.push("/auth/login")
+        setUser(null)
       } finally {
         setIsLoading(false)
       }
@@ -85,7 +93,7 @@ export function useAuth() {
   const refreshUser = async () => {
     if (!user) return null
 
-    const updatedUser = await fetchUserById(user.id)
+    const updatedUser = await fetchCurrentUser()
     if (updatedUser) {
       setUser(updatedUser)
       localStorage.setItem("user", JSON.stringify(updatedUser))

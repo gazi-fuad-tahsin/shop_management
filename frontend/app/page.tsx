@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { BrandLogo } from "@/components/brand-logo"
 
 type Package = {
   _id: string
@@ -85,7 +85,7 @@ export default function LandingPage() {
           <div className="space-y-8">
             <nav className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <Image src="/navbar.png" alt="Vendastra" width={44} height={44} className="h-11 w-11 rounded-md object-contain" />
+                <BrandLogo variant="mark" size="sm" />
                 <span className="text-lg font-semibold">Vendastra</span>
               </div>
               <div className="flex items-center gap-2">

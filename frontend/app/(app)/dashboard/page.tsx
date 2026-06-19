@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,6 +40,7 @@ interface ShopStat { _id: string; shopName: string; totalSales: number; count: n
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const searchParams = useSearchParams()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [revenueToday, setRevenueToday] = useState<RevenueToday | null>(null)
   const [costToday, setCostToday] = useState<CostToday | null>(null)
@@ -88,6 +90,11 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchShops()
   }, [user?.role])
+
+  useEffect(() => {
+    const requestedShop = searchParams.get("shopId")
+    if (requestedShop && user?.role === "admin") setSelectedShop(requestedShop)
+  }, [searchParams, user?.role])
 
   useEffect(() => {
     fetchData()

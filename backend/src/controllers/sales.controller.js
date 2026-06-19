@@ -4,9 +4,11 @@ import Inventory from "../models/Inventory.js"
 import User from "../models/User.js"
 import { assertTenantAccess, buildTenantQuery, getUserTenant } from "../utils/tenant.js"
 
+const toNumber = (value) => Number(value || 0)
+
 export const getSales = async (req, res) => {
   try {
-    const { page = 1, limit = 50, startDate, endDate, shopId } = req.query
+    const { page = 1, limit = 50, startDate, endDate, shopId, paymentMethod, paymentStatus, minAmount, maxAmount, search } = req.query
     const skip = (page - 1) * limit
     const { query } = await buildTenantQuery(req, shopId)
 
@@ -14,6 +16,20 @@ export const getSales = async (req, res) => {
       query.createdAt = {}
       if (startDate) query.createdAt.$gte = new Date(startDate)
       if (endDate) query.createdAt.$lte = new Date(endDate)
+    }
+    if (paymentMethod && paymentMethod !== "all") query.paymentMethod = paymentMethod
+    if (paymentStatus && paymentStatus !== "all") query.paymentStatus = paymentStatus
+    if (minAmount || maxAmount) {
+      query.totalAmount = {}
+      if (minAmount) query.totalAmount.$gte = Number(minAmount)
+      if (maxAmount) query.totalAmount.$lte = Number(maxAmount)
+    }
+    if (search) {
+      query.$or = [
+        { saleNumber: new RegExp(search, "i") },
+        { customerName: new RegExp(search, "i") },
+        { customerPhone: new RegExp(search, "i") },
+      ]
     }
 
     const sales = await Sale.find(query)
@@ -162,6 +178,77 @@ export const createSale = async (req, res) => {
 
     await sale.populate(["items.product", "customer", "soldBy", "shop"])
     res.status(201).json(sale)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+export const getSaleInvoice = async (req, res) => {
+  try {
+    const sale = await Sale.findById(req.params.id)
+      .populate("items.product", "name barcode")
+      .populate("customer", "name phone email")
+      .populate("shop", "name logo address city state postalCode phone email currency taxRate")
+      .populate("soldBy", "name email")
+
+    if (!sale) return res.status(404).json({ message: "Sale not found" })
+
+    const tenant = await getUserTenant(req)
+    if (!assertTenantAccess(sale.shop?._id || sale.shop, tenant)) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+
+    const shop = sale.shop || {}
+    const paidAmount = toNumber(sale.paymentDistribution?.cash) + toNumber(sale.paymentDistribution?.bank)
+    const dueAmount = Math.max(0, toNumber(sale.totalAmount) - paidAmount)
+    const changeAmount = Math.max(0, paidAmount - toNumber(sale.totalAmount))
+    const address = [shop.address, shop.city, shop.state, shop.postalCode].filter(Boolean).join(", ")
+
+    res.json({
+      invoice: {
+        invoiceNumber: sale.saleNumber,
+        transactionId: sale._id,
+        date: sale.createdAt,
+        cashier: sale.soldBy ? { name: sale.soldBy.name, email: sale.soldBy.email } : null,
+        customer: {
+          name: sale.customer?.name || sale.customerName || "Walk-in",
+          phone: sale.customer?.phone || sale.customerPhone || "",
+          email: sale.customer?.email || "",
+        },
+        shop: {
+          name: shop.name || "Vendastro Shop",
+          logo: shop.logo || "",
+          address,
+          phone: shop.phone || "",
+          email: shop.email || "",
+          currency: shop.currency || "USD",
+        },
+        items: sale.items.map((item) => ({
+          productName: item.productName || item.product?.name || "Item",
+          barcode: item.barcode || item.product?.barcode || "",
+          quantity: toNumber(item.quantity),
+          unitPrice: toNumber(item.unitPrice),
+          discount: toNumber(item.discount),
+          tax: 0,
+          subtotal: toNumber(item.subtotal),
+        })),
+        totals: {
+          subtotal: sale.items.reduce((sum, item) => sum + toNumber(item.subtotal), 0),
+          discount: toNumber(sale.discountAmount),
+          tax: toNumber(sale.taxAmount),
+          total: toNumber(sale.totalAmount),
+          paid: paidAmount,
+          due: dueAmount,
+          change: changeAmount,
+        },
+        payment: {
+          method: sale.paymentMethod,
+          distribution: sale.paymentDistribution || { cash: 0, bank: 0 },
+          status: sale.paymentStatus,
+        },
+        notes: sale.notes || "",
+      },
+    })
   } catch (error) {
     res.status(500).json({ message: error.message })
   }

@@ -35,6 +35,16 @@ interface MonthlyReport {
     cashAmount: number
     bankAmount: number
   }>
+  branchBreakdown?: Array<{
+    shop: string
+    shopName: string
+    revenue: number
+    expenses: number
+    profit: number
+    netBalance: number
+    cashRevenue: number
+    bankRevenue: number
+  }>
 }
 
 export default function ReportsPage() {
@@ -191,6 +201,44 @@ export default function ReportsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {data?.branchBreakdown?.length ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Branch Monthly Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Branch</th>
+                    <th className="text-right py-2">Revenue</th>
+                    <th className="text-right py-2">Profit</th>
+                    <th className="text-right py-2">Expenses</th>
+                    <th className="text-right py-2">Net Balance</th>
+                    <th className="text-right py-2">Cash</th>
+                    <th className="text-right py-2">Bank</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.branchBreakdown.map((row) => (
+                    <tr key={row.shop} className="border-b">
+                      <td className="py-2">{row.shopName}</td>
+                      <td className="py-2 text-right">${(row.revenue || 0).toFixed(2)}</td>
+                      <td className="py-2 text-right">${(row.profit || 0).toFixed(2)}</td>
+                      <td className="py-2 text-right">${(row.expenses || 0).toFixed(2)}</td>
+                      <td className="py-2 text-right">${(row.netBalance || 0).toFixed(2)}</td>
+                      <td className="py-2 text-right">${(row.cashRevenue || 0).toFixed(2)}</td>
+                      <td className="py-2 text-right">${(row.bankRevenue || 0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }

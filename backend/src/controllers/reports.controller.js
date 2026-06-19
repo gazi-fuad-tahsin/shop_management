@@ -1,7 +1,7 @@
 import Sale from "../models/Sale.js"
 import Product from "../models/Product.js"
 import DailyCost from "../models/DailyCost.js"
-import User from "../models/User.js"
+import { buildTenantQuery } from "../utils/tenant.js"
 
 const getMonthRange = (monthInput) => {
   const now = new Date()
@@ -9,12 +9,6 @@ const getMonthRange = (monthInput) => {
   const start = new Date(year, month - 1, 1)
   const end = new Date(year, month, 0, 23, 59, 59, 999)
   return { start, end }
-}
-
-const getShopIdForUser = async (userId, role, shopParam) => {
-  if (role === "super_admin" && shopParam) return shopParam
-  const user = await User.findById(userId).select("shop")
-  return user?.shop
 }
 
 const getDateKey = (value) =>
@@ -31,18 +25,29 @@ const getSaleDistribution = (sale) => {
   return { cash: 0, bank: Number(sale.totalAmount || 0) }
 }
 
+const withShopFilter = (query, shopFilter) => {
+  if (shopFilter !== undefined) query.shop = shopFilter
+  return query
+}
+
+const ensureBranch = (map, shop) => {
+  const id = (shop?._id || shop)?.toString()
+  if (!id) return null
+  if (!map.has(id)) {
+    map.set(id, { shop: shop?._id || shop, shopName: shop?.name || "Shop", revenue: 0, costPrice: 0, profit: 0, expenses: 0, netBalance: 0, cashRevenue: 0, bankRevenue: 0 })
+  }
+  return map.get(id)
+}
+
 export const getMonthlyReport = async (req, res) => {
   try {
-    const { month, paymentType, shopId } = req.query
+    const { month, paymentType, shopId, category, type } = req.query
     const { start, end } = getMonthRange(month)
-    const shop = await getShopIdForUser(req.user.id, req.user.role, shopId)
-    if (!shop && req.user.role !== "super_admin") {
-      return res.status(400).json({ message: "Shop not found for this user" })
-    }
+    const tenant = await buildTenantQuery(req, shopId, {})
+    const shopFilter = tenant.query.shop
 
-    const saleQuery = { paymentStatus: "completed", createdAt: { $gte: start, $lte: end } }
-    if (shop) saleQuery.shop = shop
-    const sales = await Sale.find(saleQuery).lean()
+    const saleQuery = withShopFilter({ paymentStatus: "completed", createdAt: { $gte: start, $lte: end } }, shopFilter)
+    const sales = await Sale.find(saleQuery).populate("shop", "name").lean()
 
     const productIds = [...new Set(sales.flatMap((sale) => sale.items.map((item) => item.product?.toString()).filter(Boolean)))]
     const products = await Product.find({ _id: { $in: productIds } }).select("_id costPrice").lean()
@@ -53,6 +58,7 @@ export const getMonthlyReport = async (req, res) => {
     let cashRevenue = 0
     let bankRevenue = 0
     const dailyMap = {}
+    const branchMap = new Map()
 
     for (const sale of sales) {
       const { cash, bank } = getSaleDistribution(sale)
@@ -60,9 +66,15 @@ export const getMonthlyReport = async (req, res) => {
       if (paymentType === "bank" && bank <= 0) continue
 
       const saleDay = getDateKey(sale.createdAt)
+      const branch = ensureBranch(branchMap, sale.shop)
       totalRevenue += sale.totalAmount || 0
       cashRevenue += cash
       bankRevenue += bank
+      if (branch) {
+        branch.revenue += sale.totalAmount || 0
+        branch.cashRevenue += cash
+        branch.bankRevenue += bank
+      }
 
       if (!dailyMap[saleDay]) {
         dailyMap[saleDay] = { date: saleDay, revenue: 0, costPrice: 0, profit: 0, expenses: 0, netBalance: 0, cashAmount: 0, bankAmount: 0 }
@@ -72,23 +84,32 @@ export const getMonthlyReport = async (req, res) => {
       dailyMap[saleDay].bankAmount += bank
 
       for (const item of sale.items) {
-        const itemCost = (productCostMap.get(item.product.toString()) || 0) * item.quantity
+        const itemCost = (productCostMap.get(item.product?.toString()) || 0) * Number(item.quantity || 0)
         totalCostPrice += itemCost
         dailyMap[saleDay].costPrice += itemCost
+        if (branch) branch.costPrice += itemCost
       }
     }
 
-    const costQuery = { date: { $gte: start, $lte: end } }
-    if (shop) costQuery.shop = shop
-    const monthlyCosts = await DailyCost.find(costQuery).lean()
+    const costQuery = withShopFilter(
+      {
+        date: { $gte: start, $lte: end },
+        ...(category ? { category } : {}),
+        ...(type && type !== "all" ? { type } : {}),
+      },
+      shopFilter,
+    )
+    const monthlyCosts = await DailyCost.find(costQuery).populate("shop", "name").lean()
     const totalExpenses = monthlyCosts.reduce((sum, c) => sum + (c.amount || 0), 0)
 
     for (const c of monthlyCosts) {
       const day = getDateKey(c.date)
+      const branch = ensureBranch(branchMap, c.shop)
       if (!dailyMap[day]) {
         dailyMap[day] = { date: day, revenue: 0, costPrice: 0, profit: 0, expenses: 0, netBalance: 0, cashAmount: 0, bankAmount: 0 }
       }
       dailyMap[day].expenses += c.amount || 0
+      if (branch) branch.expenses += c.amount || 0
     }
 
     const totalProfit = totalRevenue - totalCostPrice
@@ -107,6 +128,19 @@ export const getMonthlyReport = async (req, res) => {
       })
       .sort((a, b) => a.date.localeCompare(b.date))
 
+    const branchBreakdown = [...branchMap.values()]
+      .map((branch) => ({
+        ...branch,
+        profit: Number((branch.revenue - branch.costPrice).toFixed(2)),
+        netBalance: Number((branch.revenue - branch.costPrice - branch.expenses).toFixed(2)),
+        revenue: Number(branch.revenue.toFixed(2)),
+        costPrice: Number(branch.costPrice.toFixed(2)),
+        expenses: Number(branch.expenses.toFixed(2)),
+        cashRevenue: Number(branch.cashRevenue.toFixed(2)),
+        bankRevenue: Number(branch.bankRevenue.toFixed(2)),
+      }))
+      .sort((a, b) => a.shopName.localeCompare(b.shopName))
+
     res.json({
       month: start.toISOString().slice(0, 7),
       paymentType: paymentType || "all",
@@ -119,6 +153,7 @@ export const getMonthlyReport = async (req, res) => {
         cashRevenue: Number(cashRevenue.toFixed(2)),
         bankRevenue: Number(bankRevenue.toFixed(2)),
       },
+      branchBreakdown,
       dailySummary,
     })
   } catch (error) {

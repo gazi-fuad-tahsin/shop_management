@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
-import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,7 @@ interface Shop {
 
 export default function AdminPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [shops, setShops] = useState<Shop[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -46,14 +47,18 @@ export default function AdminPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
 
-  // Redirect non-admin users
-  if (user && user.role !== "admin") {
-    redirect("/dashboard")
-  }
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      router.replace("/dashboard")
+    }
+  }, [user, router])
 
   useEffect(() => {
+    if (!user || user.role !== "admin") return
     fetchData()
-  }, [])
+  }, [user])
+
+  if (user && user.role !== "admin") return <PageLoading compact />
 
   const fetchData = async () => {
     try {

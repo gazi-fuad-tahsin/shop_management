@@ -3,7 +3,6 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AlertCircle, Clock } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { BrandLogo } from "@/components/brand-logo"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -60,16 +60,7 @@ export default function LoginPage() {
   return (
     <div className="w-full max-w-md">
       <div className="mb-6 flex items-center justify-center">
-        <div className="relative h-20 w-20 overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_18px_45px_rgba(0,0,0,0.12)]">
-          <Image
-            src="/logo%20(2).png"
-            alt="ShopManager"
-            fill
-            sizes="80px"
-            className="object-contain p-2"
-            priority
-          />
-        </div>
+        <BrandLogo variant="full" size="sm" priority alt="Vendastro" />
       </div>
 
       <Card className="border-white/70 bg-white/80 shadow-[0_24px_80px_rgba(0,0,0,0.08)] backdrop-blur-xl">

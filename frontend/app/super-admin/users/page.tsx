@@ -21,15 +21,19 @@ type User = {
 export default function SuperAdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [search, setSearch] = useState("")
+  const [roleFilter, setRoleFilter] = useState("all")
 
   const loadUsers = async () => {
-    const response = await apiCall("/api/super-admin/users")
+    const params = new URLSearchParams()
+    if (roleFilter !== "all") params.set("role", roleFilter)
+    if (search.trim()) params.set("search", search.trim())
+    const response = await apiCall(`/api/super-admin/users?${params.toString()}`)
     if (response.ok) setUsers(await response.json())
   }
 
   useEffect(() => {
     loadUsers()
-  }, [])
+  }, [roleFilter])
 
   const filtered = useMemo(
     () => users.filter((user) => [user.name, user.email, user.role, user.shop?.name].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase())),
@@ -53,9 +57,19 @@ export default function SuperAdminUsersPage() {
       <Card>
         <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>All Users</CardTitle>
-          <div className="flex w-full items-center gap-2 sm:w-80">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <Search className="h-4 w-4 text-muted-foreground" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search users" />
+            <Input className="w-72" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => event.key === "Enter" && loadUsers()} placeholder="Search users" />
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                <SelectItem value="super_admin">Super Admin</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="staff">Staff</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">

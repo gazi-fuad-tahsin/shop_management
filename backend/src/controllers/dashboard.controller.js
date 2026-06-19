@@ -2,7 +2,7 @@ import Sale from "../models/Sale.js"
 import User from "../models/User.js"
 import Product from "../models/Product.js"
 import Inventory from "../models/Inventory.js"
-import { buildTenantQuery, getUserTenant } from "../utils/tenant.js"
+import { buildTenantQuery } from "../utils/tenant.js"
 
 export const getDashboardStats = async (req, res) => {
   try {
@@ -40,7 +40,10 @@ export const getDashboardStats = async (req, res) => {
 
 export const getShopWiseStats = async (req, res) => {
   try {
+    const { shopId } = req.query
+    const { query: shopFilter } = await buildTenantQuery(req, shopId)
     const shopStats = await Sale.aggregate([
+      { $match: shopFilter },
       { $group: { _id: "$shop", totalSales: { $sum: "$totalAmount" }, count: { $sum: 1 }, avgTransaction: { $avg: "$totalAmount" } } },
       { $lookup: { from: "shops", localField: "_id", foreignField: "_id", as: "shopInfo" } },
       { $unwind: "$shopInfo" },
@@ -55,8 +58,8 @@ export const getShopWiseStats = async (req, res) => {
 
 export const getCategorySales = async (req, res) => {
   try {
-    const tenant = await getUserTenant(req)
-    const shopFilter = tenant.isGlobal ? {} : { shop: tenant.shopId }
+    const { shopId } = req.query
+    const { query: shopFilter } = await buildTenantQuery(req, shopId)
 
     const categorySales = await Sale.aggregate([
       { $match: shopFilter },

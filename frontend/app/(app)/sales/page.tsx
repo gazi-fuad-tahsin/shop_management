@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, Search } from "lucide-react"
+import { Plus, Printer, Search } from "lucide-react"
 import { apiCall } from "@/lib/api"
 import { SalesDialog } from "@/components/sales-dialog"
+import { InvoiceDialog } from "@/components/invoice-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/hooks/use-auth"
@@ -39,7 +40,12 @@ export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([])
   const [shops, setShops] = useState<Shop[]>([])
   const [selectedShop, setSelectedShop] = useState("all")
+  const [paymentFilter, setPaymentFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
+  const [invoiceSaleId, setInvoiceSaleId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -50,7 +56,7 @@ export default function SalesPage() {
 
   useEffect(() => {
     fetchSales()
-  }, [selectedShop, user?.role])
+  }, [selectedShop, user?.role, paymentFilter, statusFilter, startDate, endDate, searchTerm])
 
   const fetchShops = async () => {
     const response = await apiCall("/api/shops")
@@ -61,7 +67,14 @@ export default function SalesPage() {
   const fetchSales = async () => {
     try {
       setIsLoading(true)
-      const query = user?.role === "admin" && selectedShop !== "all" ? `?shopId=${selectedShop}` : ""
+      const params = new URLSearchParams()
+      if (user?.role === "admin" && selectedShop !== "all") params.set("shopId", selectedShop)
+      if (paymentFilter !== "all") params.set("paymentMethod", paymentFilter)
+      if (statusFilter !== "all") params.set("paymentStatus", statusFilter)
+      if (startDate) params.set("startDate", startDate)
+      if (endDate) params.set("endDate", endDate)
+      if (searchTerm.trim()) params.set("search", searchTerm.trim())
+      const query = params.toString() ? `?${params.toString()}` : ""
       const response = await apiCall(`/api/sales${query}`)
       const data = await response.json()
       const baseSales = data.sales || []
@@ -77,7 +90,7 @@ export default function SalesPage() {
     }
   }
 
-  const filteredSales = sales?.filter((sale) => sale.saleNumber.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredSales = sales
 
   return (
     <div className="p-8">
@@ -102,6 +115,31 @@ export default function SalesPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="flex-1 min-w-[220px]"
             />
+            <Input className="w-[150px]" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            <Input className="w-[150px]" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="bank">Bank</SelectItem>
+                <SelectItem value="mixed">Mixed</SelectItem>
+                <SelectItem value="card">Card</SelectItem>
+                <SelectItem value="online">Online</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => { setSearchTerm(""); setStartDate(""); setEndDate(""); setPaymentFilter("all"); setStatusFilter("all"); setSelectedShop("all") }}>
+              Reset
+            </Button>
             {user?.role === "admin" && (
               <Select value={selectedShop} onValueChange={setSelectedShop}>
                 <SelectTrigger className="w-[220px]">
@@ -133,6 +171,7 @@ export default function SalesPage() {
                   <TableHead>Payment Method</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Invoice</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -157,6 +196,19 @@ export default function SalesPage() {
                       </span>
                     </TableCell>
                     <TableCell>{new Date(sale.createdAt).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setInvoiceSaleId(sale._id)
+                        }}
+                      >
+                        <Printer className="mr-2 h-4 w-4" />
+                        Invoice
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -193,10 +245,22 @@ export default function SalesPage() {
                   ))}
                 </div>
               </div>
+              <Button className="mt-3 w-full" onClick={() => setInvoiceSaleId(selectedSale._id)}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print Invoice
+              </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      <InvoiceDialog
+        open={!!invoiceSaleId}
+        saleId={invoiceSaleId}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceSaleId(null)
+        }}
+      />
 
       <SalesDialog
         open={isDialogOpen}
