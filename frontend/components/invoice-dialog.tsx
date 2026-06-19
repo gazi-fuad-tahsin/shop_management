@@ -200,7 +200,7 @@ export function InvoiceDialog({ open, saleId, onOpenChange }: InvoiceDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[90vh] w-[calc(100vw-2rem)] max-w-[760px] overflow-hidden p-4 sm:max-w-[760px]">
         <DialogHeader className="invoice-no-print">
-          {/* <DialogTitle>Printable Invoice</DialogTitle> */}
+          <DialogTitle className="sr-only">Printable Invoice</DialogTitle>
         </DialogHeader>
 
         <style jsx global>{`

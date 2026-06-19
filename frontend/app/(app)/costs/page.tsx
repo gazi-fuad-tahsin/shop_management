@@ -184,6 +184,12 @@ export default function CostsPage() {
     }
   }, [filterCategory, visibleCategories])
 
+  useEffect(() => {
+    if (user?.role === "staff") {
+      router.replace("/dashboard")
+    }
+  }, [user?.role, router])
+
   const startEditing = (entry: CostEntry) => {
     setEditingId(entry._id)
     setEditTitle(entry.title)
@@ -579,8 +585,3 @@ export default function CostsPage() {
     </div>
   )
 }
-  useEffect(() => {
-    if (user?.role === "staff") {
-      router.replace("/dashboard")
-    }
-  }, [user?.role, router])
